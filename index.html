@@ -33,6 +33,18 @@ nav button.on{color:var(--ice)}nav b{display:block;font-size:20px}
 .x{background:none!important;color:var(--mut)!important;padding:4px 8px}
 .stat{font-size:22px;font-weight:800}.quote{font-style:italic;color:#cbd5e1;font-size:14px;margin-top:8px}
 #toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ok);color:#0b1220;padding:10px 18px;border-radius:20px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:9}
+.chart{position:relative;height:150px;display:flex;align-items:flex-end;gap:6px;margin:22px 0 0}
+.chart .col{flex:1;height:100%;display:flex;justify-content:center;align-items:flex-end}
+.stack{width:70%;max-width:32px;min-height:3px;display:flex;flex-direction:column-reverse;border-radius:6px 6px 0 0;overflow:hidden;background:#1a2438;transition:.3s}
+.stack i{display:block;width:100%}
+.col.sel .stack{outline:2px solid #fff;outline-offset:1px}
+.goal{position:absolute;left:0;right:0;border-top:1px dashed var(--warn);pointer-events:none}
+.goal span{position:absolute;right:0;top:-15px;font-size:10px;color:var(--warn)}
+.labels{display:flex;gap:6px}.labels small{flex:1;text-align:center;font-size:11px;color:var(--mut);margin-top:6px}
+.labels small.on{color:var(--txt);font-weight:700}
+.donut{width:120px;height:120px;border-radius:50%;display:grid;place-items:center;flex-shrink:0}
+.donut div{width:84px;height:84px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-weight:800;font-size:15px}
+.dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
 </style></head><body>
 <header><div class="row between"><h1>❄ WINTER ARC</h1><div id="lvl" class="sub"></div></div><div id="dayc" class="sub"></div><div id="quote" class="quote"></div></header>
 <main id="app"></main><div id="toast"></div>
@@ -93,14 +105,41 @@ function startT(){if(S.timer.run)return;S.timer.subj=$('subj')?.value.trim()||S.
 function pauseT(){if(!S.timer.run)return;S.timer.acc=el();S.timer.run=false;save();wl?.release?.();render()}
 function stopT(auto){let mins=Math.round(el()/60000);if(S.timer.pomo)mins=Math.min(mins,25);const subj=$('subj')?.value.trim()||S.timer.subj||'General';
  S.timer={...S.timer,run:false,t0:0,acc:0,subj};wl?.release?.();wl=null;
- if(mins>=1){S.sessions.push({id:uid(),subj,mins,date:td()});toast(`Saved ${fm(mins)} · +${mins} XP 💪`)}else if(!auto)alert('Less than 1 minute. Not saved.');
+ if(mins>=1){S.sessions.push({id:uid(),subj,mins,date:td(),at:new Date().toTimeString().slice(0,5)});GD=td();toast(`Saved ${fm(mins)} · +${mins} XP 💪`)}else if(!auto)alert('Less than 1 minute. Not saved.');
  save();render()}
 function setPomo(b){if(S.timer.run||S.timer.acc)return toast('Stop the timer first');S.timer.pomo=b;save();render()}
 function beep(){try{navigator.vibrate?.([400,150,400,150,400]);const c=new AudioContext(),o=c.createOscillator();o.frequency.value=880;o.connect(c.destination);o.start();o.stop(c.currentTime+.7)}catch(e){}}
+
+/* ---------- USAGE GRAPH ---------- */
+const PAL=['#7dd3fc','#a78bfa','#4ade80','#fbbf24','#f472b6','#fb923c','#2dd4bf','#f87171'];
+const col=s=>{const i=[...new Set(S.sessions.map(x=>x.subj))].indexOf(s);return PAL[Math.max(0,i)%PAL.length]};
+let GW=0,GD=td();
+function weekOf(off){const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7)+off*7);return [...Array(7)].map((_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return x.toLocaleDateString('en-CA')})}
+function bySubj(d){const o={};S.sessions.filter(s=>s.date===d).forEach(s=>o[s.subj]=(o[s.subj]||0)+s.mins);return Object.entries(o).sort((a,b)=>b[1]-a[1])}
+function wk(n){const g=Math.min(0,GW+n);if(g===GW)return;GW=g;GD=GW===0?td():weekOf(GW)[6];render()}
+function pick(d){GD=d;render()}
+function usage(){const W=weekOf(GW),tot=W.map(minsOn),max=Math.max(S.goal,...tot,1),wt=sum(tot,x=>x),
+ past=W.filter(d=>d<=td()).length||1,avg=Math.round(wt/past),sel=bySubj(GD),st=minsOn(GD),
+ f=d=>new Date(d+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'}),DN=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+ const y=new Date(GD+'T00:00');y.setDate(y.getDate()-1);const diff=st-minsOn(y.toLocaleDateString('en-CA'));
+ let a=0;const grad=st?sel.map(([s,m])=>{const g=`${col(s)} ${a/st*360}deg ${(a+m)/st*360}deg`;a+=m;return g}).join(','):'#1a2438 0deg 360deg';
+ return `<div class="card"><h3>📊 Study time</h3>
+ <div class="row between"><button class="x" onclick="wk(-1)">◀</button><div style="text-align:center"><b>${GW===0?'This week':GW===-1?'Last week':f(W[0])+' – '+f(W[6])}</b><div class="mut">Total ${fm(wt)} · Avg ${fm(avg)}/day</div></div><button class="x" onclick="wk(1)" style="${GW>=0?'opacity:.25':''}">▶</button></div>
+ <div class="chart"><div class="goal" style="bottom:${S.goal/max*100}%"><span>Goal ${fm(S.goal)}</span></div>
+ ${W.map((d,i)=>`<div class="col ${d===GD?'sel':''}" onclick="pick('${d}')"><div class="stack" style="height:${tot[i]/max*100}%">${bySubj(d).map(([s,m])=>`<i style="height:${m/tot[i]*100}%;background:${col(s)}"></i>`).join('')}</div></div>`).join('')}</div>
+ <div class="labels">${W.map((d,i)=>`<small class="${d===GD?'on':''}" onclick="pick('${d}')">${DN[i]}</small>`).join('')}</div>
+ <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+ <b>${new Date(GD+'T00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'})}</b>
+ <div class="row" style="gap:16px;margin-top:12px"><div class="donut" style="background:conic-gradient(${grad})"><div>${fm(st)}</div></div>
+ <div style="flex:1">${sel.length?sel.map(([s,m])=>`<div class="row between" style="font-size:14px;margin-bottom:7px"><span><span class="dot" style="background:${col(s)}"></span>${esc(s)}</span><span>${fm(m)} <span class="mut">${Math.round(m/st*100)}%</span></span></div>`).join(''):'<div class="mut">No study on this day.</div>'}</div></div>
+ <div class="mut" style="margin-top:10px">${diff>0?`▲ ${fm(diff)} more than the day before 🔥`:diff<0?`▼ ${fm(-diff)} less than the day before`:'Same as the day before'}</div>
+ ${S.sessions.filter(s=>s.date===GD).map(s=>`<div class="li"><span><span class="dot" style="background:${col(s.subj)}"></span>${esc(s.subj)}</span><span class="mut">${s.at?'ended '+s.at+' · ':''}${fm(s.mins)}</span></div>`).join('')}
+ </div></div>`}
+
 function pStudy(){const d=td(),m=minsOn(d),subs=[...new Set(S.sessions.map(s=>s.subj))];
- const w=new Date();w.setDate(w.getDate()-6);const w0=w.toLocaleDateString('en-CA'),wk={};
- S.sessions.filter(s=>s.date>=w0).forEach(s=>wk[s.subj]=(wk[s.subj]||0)+s.mins);
- const we=Object.entries(wk).sort((a,b)=>b[1]-a[1]),best=Math.max(0,...Object.values(S.sessions.reduce((a,s)=>(a[s.date]=(a[s.date]||0)+s.mins,a),{})));
+ const w=new Date();w.setDate(w.getDate()-6);const w0=w.toLocaleDateString('en-CA'),wk7={};
+ S.sessions.filter(s=>s.date>=w0).forEach(s=>wk7[s.subj]=(wk7[s.subj]||0)+s.mins);
+ const we=Object.entries(wk7).sort((a,b)=>b[1]-a[1]),best=Math.max(0,...Object.values(S.sessions.reduce((a,s)=>(a[s.date]=(a[s.date]||0)+s.mins,a),{})));
  return `<div class="card"><div class="row"><button class="${S.timer.pomo?'g':''}" style="flex:1" onclick="setPomo(false)">Free timer</button><button class="${S.timer.pomo?'':'g'}" style="flex:1" onclick="setPomo(true)">🍅 Pomodoro 25</button></div>
  <div class="big" id="tm">00:00:00</div>
  <input id="subj" list="sl" placeholder="What are you studying?" value="${esc(S.timer.subj)}" oninput="S.timer.subj=this.value;save()"><datalist id="sl">${subs.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
@@ -108,11 +147,11 @@ function pStudy(){const d=td(),m=minsOn(d),subs=[...new Set(S.sessions.map(s=>s.
  <div class="mut" style="margin-top:8px;text-align:center">Timer keeps running even if you close the app.</div></div>
  <div class="card"><div class="row between"><b>Today</b><span>${fm(m)} / ${fm(S.goal)}</span></div><div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,m/S.goal*100)}%;background:${m>=S.goal?'var(--ok)':'var(--ice)'}"></i></div>
  <div class="mut" style="margin-top:6px">${m>=S.goal?'Goal smashed! 🏆 Anything extra is bonus XP.':`${fm(S.goal-m)} to go. You've got this.`}</div></div>
+ ${usage()}
  <div class="grid2"><div class="card"><div class="mut">LAST 7 DAYS</div><div class="stat">${fm(sum(we,x=>x[1]))}</div></div><div class="card"><div class="mut">BEST DAY</div><div class="stat">${fm(best)}</div></div></div>
  <div class="card"><h3>Study heatmap</h3>${heat(k=>minsOn(k)/S.goal)}</div>
- <div class="card"><h3>This week by subject</h3>${we.length?we.map(([s,x])=>`<div style="margin-bottom:8px"><div class="row between" style="font-size:14px"><span>${esc(s)}</span><span>${fm(x)}</span></div><div class="bar"><i style="width:${x/we[0][1]*100}%"></i></div></div>`).join(''):'<div class="mut">No sessions yet.</div>'}</div>
  <div class="card"><h3>Forgot the timer? Add manually</h3><input id="ms" list="sl" placeholder="Subject"><div class="grid2"><input id="mm" type="number" inputmode="numeric" placeholder="Minutes"><input id="md" type="date" value="${d}"></div><button class="g" style="width:100%" onclick="addMan()">Add session</button></div>
- <div class="card"><h3>Recent sessions</h3>${S.sessions.slice(-15).reverse().map(s=>`<div class="li"><div>${esc(s.subj)}<div class="mut">${s.date}</div></div><div class="row"><b>${fm(s.mins)}</b><button class="x" onclick="delS('${s.id}')">✕</button></div></div>`).join('')||'<div class="mut">Start your first session above 👆</div>'}</div>`}
+ <div class="card"><h3>Recent sessions</h3>${S.sessions.slice(-15).reverse().map(s=>`<div class="li"><div><span class="dot" style="background:${col(s.subj)}"></span>${esc(s.subj)}<div class="mut">${s.date}${s.at?' · '+s.at:''}</div></div><div class="row"><b>${fm(s.mins)}</b><button class="x" onclick="delS('${s.id}')">✕</button></div></div>`).join('')||'<div class="mut">Start your first session above 👆</div>'}</div>`}
 function addMan(){const mins=+$('mm').value;if(!(mins>0))return alert('Enter minutes');S.sessions.push({id:uid(),subj:v('ms')||'General',mins:Math.round(mins),date:$('md').value||td()});save();toast('Added');render()}
 function delS(id){if(confirm('Delete session?')){S.sessions=S.sessions.filter(s=>s.id!==id);save();render()}}
 
