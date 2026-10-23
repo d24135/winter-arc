@@ -46,11 +46,11 @@ nav button.on{color:var(--ice)}nav b{display:block;font-size:20px}
 .donut div{width:84px;height:84px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-weight:800;font-size:15px}
 .dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
 </style></head><body>
-<header><div class="row between"><h1>❄ WINTER ARC</h1><div id="lvl" class="sub"></div></div><div id="dayc" class="sub"></div><div id="quote" class="quote"></div></header>
+<header><div class="row between"><h1>❄ WINTER ARC</h1><div class="sub"><span id="lvl"></span> <span id="syn"></span></div></div><div id="dayc" class="sub"></div><div id="quote" class="quote"></div></header>
 <main id="app"></main><div id="toast"></div>
 <nav><button data-p="arc" onclick="go('arc')"><b>❄</b>Arc</button><button data-p="study" onclick="go('study')"><b id="nst">⏱</b>Study</button><button data-p="money" onclick="go('money')"><b>₹</b>Money</button><button data-p="more" onclick="go('more')"><b>⚙</b>More</button></nav>
 <script>
-const K='winterArc_v1',$=id=>document.getElementById(id),v=id=>$(id).value.trim();
+const K='winterArc_v1',SK='winterArc_sync',$=id=>document.getElementById(id),v=id=>$(id).value.trim();
 const td=()=>new Date().toLocaleDateString('en-CA'),mo=()=>td().slice(0,7);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -63,11 +63,26 @@ const DEF={start:td(),days:90,goal:240,budget:0,
  tx:[],debts:[],fixed:[],inv:[]};
 let S=Object.assign(structuredClone(DEF),JSON.parse(localStorage.getItem(K)||'{}'));
 let P='arc',MT='over',TT='exp',HM=mo(),wl=null;
-const save=()=>localStorage.setItem(K,JSON.stringify(S));
 const Q=["You don't need motivation. You need to start.","Lazy mood? Do 10 minutes. Then decide.","Small daily wins beat rare heroic efforts.","Winter is for building. Spring is for showing.","Every rupee tracked is a rupee controlled.","Don't break the chain.","The you of 90 days later is watching.","Comfort is the enemy of the arc.","One more session. One less excuse.","Show up even when it's ugly.","Debt-free and disciplined. That's the arc.","Nobody is coming to save you. Open the book."];
 const RK=['Snowflake','Frost','Ice Cold','Blizzard','Glacier','Avalanche','Polar Beast','Arctic Legend'];
 function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1700)}
 function go(p){P=p;render();scrollTo(0,0)}
+
+/* ---------- CLOUD SYNC ---------- */
+let SY=JSON.parse(localStorage.getItem(SK)||'{}'),pushT=null,syncState='';
+function setSync(s){syncState=s;const e=$('syn');if(e)e.textContent=s}
+function save(){S._t=Date.now();localStorage.setItem(K,JSON.stringify(S));if(SY.url){clearTimeout(pushT);setSync('⏳');pushT=setTimeout(push,2500)}}
+function useCloud(c){S=Object.assign(structuredClone(DEF),c);localStorage.setItem(K,JSON.stringify(S));render()}
+async function getCloud(url,pin){const r=await fetch(url+'?pin='+encodeURIComponent(pin));const j=await r.json();if(!j.ok)throw j.err;return j.data||{}}
+async function push(){if(!SY.url)return;try{const r=await fetch(SY.url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({pin:SY.pin,data:S})});const j=await r.json();if(!j.ok)throw j.err;setSync('☁✓')}catch(e){setSync('☁✗')}}
+async function pull(){if(!SY.url)return;setSync('⏳');try{const c=await getCloud(SY.url,SY.pin);
+ if((c._t||0)>(S._t||0)){useCloud(c);toast('Synced from cloud ☁')}else if(!c._t||(S._t||0)>c._t)await push();setSync('☁✓')}catch(e){setSync('☁✗')}}
+async function connect(){const url=v('surl'),pin=v('spin');if(!url.startsWith('https://script.google.com/'))return alert('Paste the Web app URL from Google Apps Script (ends with /exec)');if(!pin)return alert('Enter your PIN');
+ setSync('⏳');try{const c=await getCloud(url,pin);SY={url,pin};localStorage.setItem(SK,JSON.stringify(SY));
+  if(c._t&&confirm(`Cloud already has data (last saved ${new Date(c._t).toLocaleString('en-IN')}).\n\nOK = Download cloud data to THIS device (use this on laptop / 2nd device)\nCancel = Replace cloud with THIS device's data`)){useCloud(c);toast('Downloaded from cloud ☁')}
+  else{S._t=S._t||Date.now();localStorage.setItem(K,JSON.stringify(S));await push();toast('Uploaded to cloud ☁')}
+  setSync('☁✓');render()}catch(e){setSync('');alert('Could not connect: '+e+'\n\nCheck the URL, the PIN, and that "Who has access" is set to Anyone.')}}
+function disc(){if(confirm('Stop syncing on this device? (Data stays on this device and in Drive.)')){SY={};localStorage.removeItem(SK);setSync('');render()}}
 
 /* ---------- ARC ---------- */
 const doneIds=d=>(S.hlog[d]||[]).filter(id=>S.habits.some(h=>h.id===id));
@@ -233,19 +248,21 @@ function mAcc(){return `<div class="card"><h3>Your accounts</h3><div class="mut"
 function addAcc(){const n=v('an');if(!n)return;S.acc.push({id:uid(),name:n,type:$('aty').value,open:0,limit:0});save();render()}
 
 /* ---------- MORE ---------- */
-function pMore(){return `<div class="card"><h3>Winter Arc settings</h3><div class="mut">Start date</div><input id="sd" type="date" value="${S.start}"><div class="mut">Arc length (days)</div><input id="sdy" type="number" value="${S.days}"><div class="mut">Daily study goal (minutes)</div><input id="sg" type="number" value="${S.goal}"><button style="width:100%" onclick="saveSet()">Save</button></div>
- <div class="card"><h3>Backup (do this every Sunday!)</h3><div class="mut" style="margin-bottom:10px">Your data lives only in this phone's Chrome. Clearing Chrome data deletes it. Export a backup regularly and keep it in Google Drive.</div>
+function pMore(){return `<div class="card"><h3>☁ Cloud sync (phone ↔ laptop)</h3>${SY.url?`<div class="row between"><span>Connected to Google Drive</span><span class="mut">${syncState}</span></div><div class="mut" style="margin-top:6px">Changes upload automatically. Data is pulled every time you open the app.</div><div class="row" style="margin-top:10px"><button style="flex:1" onclick="pull()">🔄 Sync now</button><button class="g" style="flex:1" onclick="disc()">Disconnect</button></div>`
+ :`<div class="mut" style="margin-bottom:10px">Paste your Google Apps Script Web app URL and your PIN.</div><input id="surl" placeholder="https://script.google.com/macros/s/.../exec"><input id="spin" type="password" placeholder="PIN"><button style="width:100%" onclick="connect()">Connect</button>`}</div>
+ <div class="card"><h3>Winter Arc settings</h3><div class="mut">Start date</div><input id="sd" type="date" value="${S.start}"><div class="mut">Arc length (days)</div><input id="sdy" type="number" value="${S.days}"><div class="mut">Daily study goal (minutes)</div><input id="sg" type="number" value="${S.goal}"><button style="width:100%" onclick="saveSet()">Save</button></div>
+ <div class="card"><h3>Backup file</h3><div class="mut" style="margin-bottom:10px">Extra safety: download a backup now and then and keep it in Google Drive.</div>
  <div class="row"><button style="flex:1" onclick="exportD()">⬇ Export</button><label style="flex:1"><span class="btnlike">⬆ Import</span><input type="file" accept=".json" hidden onchange="importD(this.files[0])"></label></div></div>
- <div class="card"><h3>Danger zone</h3><button class="r" style="width:100%" onclick="if(confirm('Delete ALL data?')&&confirm('Really? This cannot be undone.')){localStorage.removeItem(K);location.reload()}">Reset everything</button></div>`}
+ <div class="card"><h3>Danger zone</h3><button class="r" style="width:100%" onclick="if(confirm('Delete ALL data on this device?')&&confirm('Really? If sync is on, cloud data will download again on reopen.')){localStorage.removeItem(K);location.reload()}">Reset this device</button></div>`}
 function saveSet(){S.start=$('sd').value||td();S.days=+v('sdy')||90;S.goal=+v('sg')||240;save();toast('Saved');render()}
 function exportD(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download=`winter-arc-backup-${td()}.json`;a.click()}
 function importD(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{S=Object.assign(structuredClone(DEF),JSON.parse(r.result));save();render();alert('Restored!')}catch(e){alert('Invalid backup file')}};r.readAsText(f)}
 
 /* ---------- CORE ---------- */
 function render(){head();$('app').innerHTML={arc:pArc,study:pStudy,money:pMoney,more:pMore}[P]();
- document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===P));$('nst').textContent=S.timer.run?'🔴':'⏱'}
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===P));$('nst').textContent=S.timer.run?'🔴':'⏱';setSync(syncState)}
 setInterval(()=>{const ms=el();if(S.timer.pomo&&S.timer.run&&ms>=25*60000){stopT(true);beep();setTimeout(()=>alert('🍅 Pomodoro done! Take a 5 minute break.'),100);return}
  const t=$('tm');if(t)t.textContent=hms(S.timer.pomo?Math.max(0,25*60000-ms):ms)},500);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(S.timer.run)lock();render()}});
-render();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(S.timer.run)lock();render();pull()}});
+render();pull();
 </script></body></html>
