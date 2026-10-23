@@ -45,6 +45,7 @@ nav button.on{color:var(--ice)}nav b{display:block;font-size:20px}
 .donut div{width:84px;height:84px;border-radius:50%;background:var(--card);display:grid;place-items:center;font-weight:800;font-size:15px}
 .dot{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
 .ycell{aspect-ratio:1;border-radius:2px;display:block}
+.outbox{margin-top:12px;padding:14px;border-radius:10px;background:#0e1626;text-align:center;color:var(--mut);font-size:13px}
 </style></head><body>
 <header><div class="row between"><h1>❄ WINTER ARC</h1><div class="sub"><span id="lvl"></span> <span id="syn"></span></div></div><div id="dayc" class="sub"></div><div id="quote" class="quote"></div></header>
 <main id="app"></main><div id="toast"></div>
@@ -102,8 +103,13 @@ function gridView(V,p,cf,lf,pk,sd){const sel=d=>d===sd?';outline:2px solid #fff;
  return h}
 function viewBtns(cur,fn){return `<div class="row" style="gap:6px;margin-bottom:10px">${[['week','Week'],['month','Month'],['year','Year']].map(([k,n])=>`<button class="${cur===k?'':'g'}" style="flex:1;padding:8px;font-size:13px" onclick="${fn}('${k}')">${n}</button>`).join('')}</div>`}
 const longDate=d=>new Date(d+'T00:00').toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'});
+const shortDate=d=>new Date(d+'T00:00').toLocaleDateString('en-IN',{day:'numeric',month:'short'});
 const prevDay=d=>{const y=new Date(d+'T00:00');y.setDate(y.getDate()-1);return ds(y)};
 const shiftDay=(d,n)=>{const x=new Date(d+'T00:00');x.setDate(x.getDate()+n);return ds(x)};
+const arcEnd=()=>shiftDay(S.start,(S.days||90)-1);
+const inArc=d=>d>=S.start&&d<=arcEnd();
+const outLabel=d=>d<S.start?`Outside Winter Arc · starts ${shortDate(S.start)}`:`Outside Winter Arc · ended ${shortDate(arcEnd())}`;
+const outBox=d=>`<div class="outbox">❄ ${outLabel(d)}<br><span style="font-size:12px">This day isn't part of your Winter Arc, so nothing is counted.</span></div>`;
 
 /* ---------- HABIT CORE ---------- */
 const habitsOn=d=>S.habits.filter(h=>!h.from||h.from<=d);
@@ -117,7 +123,7 @@ const xp=()=>sum(Object.values(S.hlog),a=>a.length)*20+sum(S.sessions,s=>s.mins)
 
 /* ---------- HABIT HEATMAP ---------- */
 let HV='week',HO=0,HD=td();
-const active=d=>d<=td()&&(d>=S.start||(S.hlog[d]||[]).length>0);
+const active=d=>d<=td()&&(inArc(d)||(S.hlog[d]||[]).length>0);
 function hColor(d){if(!active(d))return '#1a2438';const s=hStat(d);if(!s.n)return '#1a2438';const f=s.done.length/s.n;return f===1?'#22c55e':f===0?'#4c1d24':`rgba(125,211,252,${.25+.6*f})`}
 function hView(x){HV=x;HO=0;render()}
 function hNav(n){const o=Math.min(0,HO+n);if(o===HO)return;HO=o;render()}
@@ -129,10 +135,12 @@ function hSum(days){const A=days.filter(d=>active(d)&&hStat(d).n);if(!A.length)r
  const top=Object.entries(miss).sort((a,b)=>b[1]-a[1]).slice(0,3);
  return `<div class="grid2" style="margin-top:12px"><div><div class="mut">COMPLETION</div><div class="stat">${Math.round(dn/tot*100)}%</div></div><div><div class="mut">PERFECT DAYS</div><div class="stat">${perfect}/${A.length}</div></div></div>
  ${top.length?`<div class="mut" style="margin-top:10px">MOST MISSED</div>${top.map(([n,c])=>`<div class="li"><span>${esc(n)}</span><span class="neg">missed ${c} day${c>1?'s':''}</span></div>`).join('')}`:'<div class="pos" style="margin-top:10px">Nothing missed. Beast mode 🏆</div>'}`}
-function hDetail(){const d=HD,s=hStat(d),past=d<=td(),yd=prevDay(d),ys=hStat(yd);
+function hDetail(){const d=HD,s=hStat(d),fut=d>td(),out=!fut&&!active(d),past=!fut&&!out,yd=prevDay(d),ys=hStat(yd);
  const slipped=s.miss.filter(h=>ys.done.some(x=>x.id===h.id)),fixed=s.done.filter(h=>ys.miss.some(x=>x.id===h.id));
+ const status=fut?'Future day':out?'Outside Winter Arc':`${s.done.length}/${s.n} habits done · ${fm(minsOn(d))} studied`;
  return `<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
- <div class="row between"><button class="x" onclick="hDay(-1)">◀</button><div style="text-align:center"><b>${longDate(d)}</b><div class="mut">${past?`${s.done.length}/${s.n} habits done · ${fm(minsOn(d))} studied`:'Future day'}</div></div><button class="x" onclick="hDay(1)" style="${d>=td()?'opacity:.25':''}">▶</button></div>
+ <div class="row between"><button class="x" onclick="hDay(-1)">◀</button><div style="text-align:center"><b>${longDate(d)}</b><div class="mut">${status}</div></div><button class="x" onclick="hDay(1)" style="${d>=td()?'opacity:.25':''}">▶</button></div>
+ ${out?outBox(d):''}
  ${past?s.done.map(h=>`<div class="habit done" onclick="togHD('${d}','${h.id}')" style="margin-top:6px"><div class="chk">✓</div><div style="flex:1">${esc(h.n)}</div></div>`).join('')+
  s.miss.map(h=>`<div class="habit" onclick="togHD('${d}','${h.id}')" style="margin-top:6px;border:1px solid #4c1d24"><div class="chk" style="border-color:var(--bad);color:var(--bad)">✗</div><div style="flex:1">${esc(h.n)} <span class="neg" style="font-size:12px">missed</span></div></div>`).join(''):''}
  ${past&&active(yd)&&(slipped.length||fixed.length)?`<div style="margin-top:8px;font-size:13px">vs previous day:${fixed.length?`<div class="pos">✓ Improved: ${fixed.map(h=>esc(h.n)).join(', ')}</div>`:''}${slipped.length?`<div class="neg">✗ Slipped: ${slipped.map(h=>esc(h.n)).join(', ')}</div>`:''}</div>`:''}
@@ -140,12 +148,12 @@ function hDetail(){const d=HD,s=hStat(d),past=d<=td(),yd=prevDay(d),ys=hStat(yd)
 function hmap(){const p=periodDays(HV,HO);return `<div class="card"><h3>📅 Habit tracker</h3>${viewBtns(HV,'hView')}
  <div class="row between" style="margin-bottom:10px"><button class="x" onclick="hNav(-1)">◀</button><b>${p.label}</b><button class="x" onclick="hNav(1)" style="${HO>=0?'opacity:.25':''}">▶</button></div>
  ${gridView(HV,p,hColor,d=>{if(!active(d))return '';const s=hStat(d);return s.done.length+'/'+s.n},'hPick',HD)}
- <div class="row" style="gap:10px;margin-top:10px;font-size:11px;color:var(--mut);flex-wrap:wrap"><span><span class="dot" style="background:#22c55e"></span>All done</span><span><span class="dot" style="background:rgba(125,211,252,.6)"></span>Partial</span><span><span class="dot" style="background:#4c1d24"></span>None</span><span><span class="dot" style="background:#1a2438"></span>Not tracked</span></div>
+ <div class="row" style="gap:10px;margin-top:10px;font-size:11px;color:var(--mut);flex-wrap:wrap"><span><span class="dot" style="background:#22c55e"></span>All done</span><span><span class="dot" style="background:rgba(125,211,252,.6)"></span>Partial</span><span><span class="dot" style="background:#4c1d24"></span>None</span><span><span class="dot" style="background:#1a2438"></span>Outside arc / future</span></div>
  ${hSum(p.days)}${hDetail()}</div>`}
 
 /* ---------- ARC PAGE ---------- */
 function head(){const day=Math.floor((new Date(td())-new Date(S.start))/864e5)+1;
- $('dayc').textContent=day<1?`Arc starts on ${S.start}`:day>S.days?`Arc complete! ${S.days} days done 🏆`:`Day ${day} of ${S.days} · ${S.days-day} days left`;
+ $('dayc').textContent=day<1?`Arc starts on ${shortDate(S.start)}`:day>S.days?`Arc complete! ${S.days} days done 🏆`:`Day ${day} of ${S.days} · ${S.days-day} days left`;
  const l=Math.floor(xp()/500)+1;$('lvl').textContent=`Lv ${l} · ${RK[Math.min(Math.floor((l-1)/3),7)]}`;
  $('quote').textContent='“'+Q[Math.max(day,0)%Q.length]+'”'}
 function msg(s){return s>=100?'Perfect day. This is who you are now ❄':s>=70?'Strong day. Finish it off.':s>=40?"Halfway there. Don't stop now.":s>0?'Started. Keep stacking small wins.':'Cold start. Pick ONE habit and do it right now.'}
@@ -197,9 +205,9 @@ function usage(){const W=weekOf(GW),tot=W.map(minsOn),max=Math.max(S.goal,...tot
  <div class="labels">${W.map((d,i)=>`<small class="${d===GD?'on':''}" onclick="pick('${d}')">${DN[i]}</small>`).join('')}</div>
  <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
  <b>${longDate(GD)}</b>
- <div class="row" style="gap:16px;margin-top:12px"><div class="donut" style="background:conic-gradient(${grad})"><div>${fm(st)}</div></div>
+ ${!st&&!inArc(GD)&&GD<=td()?outBox(GD):`<div class="row" style="gap:16px;margin-top:12px"><div class="donut" style="background:conic-gradient(${grad})"><div>${fm(st)}</div></div>
  <div style="flex:1">${sel.length?sel.map(([s,m])=>`<div class="row between" style="font-size:14px;margin-bottom:7px"><span><span class="dot" style="background:${col(s)}"></span>${esc(s)}</span><span>${fm(m)} <span class="mut">${Math.round(m/st*100)}%</span></span></div>`).join(''):'<div class="mut">No study on this day.</div>'}</div></div>
- <div class="mut" style="margin-top:10px">${diff>0?`▲ ${fm(diff)} more than the day before 🔥`:diff<0?`▼ ${fm(-diff)} less than the day before`:'Same as the day before'}</div>
+ <div class="mut" style="margin-top:10px">${diff>0?`▲ ${fm(diff)} more than the day before 🔥`:diff<0?`▼ ${fm(-diff)} less than the day before`:'Same as the day before'}</div>`}
  </div></div>`}
 
 /* ---------- STUDY HEATMAP ---------- */
@@ -209,23 +217,25 @@ function sView(x){SV=x;SO=0;render()}
 function sNav(n){const o=Math.min(0,SO+n);if(o===SO)return;SO=o;render()}
 function sPick(d){SD=d;render()}
 function sDay(n){const k=shiftDay(SD,n);if(k>td())return;SD=k;render()}
-function sSum(days){const set=new Set(days),PD=days.filter(d=>d<=td()),T=sum(PD,minsOn),studied=PD.filter(d=>minsOn(d)>0),hit=PD.filter(d=>S.goal>0&&minsOn(d)>=S.goal).length;
+function sSum(days){const set=new Set(days),PD=days.filter(d=>d<=td()&&(inArc(d)||minsOn(d)>0)),T=sum(PD,minsOn),studied=PD.filter(d=>minsOn(d)>0),hit=PD.filter(d=>S.goal>0&&minsOn(d)>=S.goal).length;
  if(!T)return '<div class="mut" style="margin-top:12px">No study in this period yet.</div>';
  const sub={};S.sessions.filter(s=>set.has(s.date)).forEach(s=>sub[s.subj]=(sub[s.subj]||0)+s.mins);const top=Object.entries(sub).sort((a,b)=>b[1]-a[1]);
  return `<div class="grid2" style="margin-top:12px"><div><div class="mut">TOTAL</div><div class="stat">${fm(T)}</div></div><div><div class="mut">DAYS STUDIED</div><div class="stat">${studied.length}/${PD.length}</div></div><div><div class="mut">AVG / STUDY DAY</div><div class="stat">${fm(Math.round(T/studied.length))}</div></div><div><div class="mut">GOAL HIT</div><div class="stat">${hit} day${hit===1?'':'s'}</div></div></div>
  <div class="mut" style="margin-top:12px">BY SUBJECT</div>${top.map(([s,m])=>`<div style="margin-top:6px"><div class="row between" style="font-size:14px"><span><span class="dot" style="background:${col(s)}"></span>${esc(s)}</span><span>${fm(m)} <span class="mut">${Math.round(m/T*100)}%</span></span></div><div class="bar"><i style="width:${m/top[0][1]*100}%;background:${col(s)}"></i></div></div>`).join('')}`}
-function sDetail(){const d=SD,m=minsOn(d),past=d<=td(),list=S.sessions.filter(s=>s.date===d),sel=bySubj(d),diff=m-minsOn(prevDay(d));
+function sDetail(){const d=SD,m=minsOn(d),fut=d>td(),out=!fut&&!m&&!inArc(d),list=S.sessions.filter(s=>s.date===d),sel=bySubj(d),diff=m-minsOn(prevDay(d));
+ const status=fut?'Future day':out?'Outside Winter Arc':`${fm(m)} studied${S.goal?` · ${Math.round(m/S.goal*100)}% of goal`:''}`;
  return `<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
- <div class="row between"><button class="x" onclick="sDay(-1)">◀</button><div style="text-align:center"><b>${longDate(d)}</b><div class="mut">${past?`${fm(m)} studied${S.goal?` · ${Math.round(m/S.goal*100)}% of goal`:''}`:'Future day'}</div></div><button class="x" onclick="sDay(1)" style="${d>=td()?'opacity:.25':''}">▶</button></div>
+ <div class="row between"><button class="x" onclick="sDay(-1)">◀</button><div style="text-align:center"><b>${longDate(d)}</b><div class="mut">${status}</div></div><button class="x" onclick="sDay(1)" style="${d>=td()?'opacity:.25':''}">▶</button></div>
+ ${out?outBox(d):''}
  ${sel.length?`<div class="bar" style="margin-top:10px;display:flex">${sel.map(([s,x])=>`<i style="width:${x/m*100}%;background:${col(s)}"></i>`).join('')}</div>`:''}
  ${sel.map(([s,x])=>{const tp=[...new Set(list.filter(z=>z.subj===s&&z.topic).map(z=>z.topic))];return `<div style="margin-top:12px"><div class="row between"><b><span class="dot" style="background:${col(s)}"></span>${esc(s)}</b><span>${fm(x)}</span></div>${tp.length?`<div style="margin:4px 0 0 16px;font-size:13px;color:#cbd5e1">📖 ${tp.map(esc).join('<br>📖 ')}</div>`:'<div class="mut" style="margin-left:16px">No topic noted</div>'}</div>`}).join('')}
- ${list.length?`<div class="mut" style="margin-top:14px">SESSIONS</div>${list.map(s=>`<div class="li"><div>${esc(s.subj)}${s.topic?` <span class="mut">· ${esc(s.topic)}</span>`:''}<div class="mut">${s.at?'ended '+s.at:'added manually'}</div></div><b>${fm(s.mins)}</b></div>`).join('')}`:(past?'<div class="mut" style="margin-top:10px">Nothing studied this day.</div>':'')}
- ${past&&(m||minsOn(prevDay(d)))?`<div class="mut" style="margin-top:8px">${diff>0?`▲ ${fm(diff)} more than the day before 🔥`:diff<0?`▼ ${fm(-diff)} less than the day before`:'Same as the day before'}</div>`:''}
+ ${list.length?`<div class="mut" style="margin-top:14px">SESSIONS</div>${list.map(s=>`<div class="li"><div>${esc(s.subj)}${s.topic?` <span class="mut">· ${esc(s.topic)}</span>`:''}<div class="mut">${s.at?'ended '+s.at:'added manually'}</div></div><b>${fm(s.mins)}</b></div>`).join('')}`:(!fut&&!out?'<div class="mut" style="margin-top:10px">Nothing studied this day.</div>':'')}
+ ${!fut&&!out&&(m||minsOn(prevDay(d)))?`<div class="mut" style="margin-top:8px">${diff>0?`▲ ${fm(diff)} more than the day before 🔥`:diff<0?`▼ ${fm(-diff)} less than the day before`:'Same as the day before'}</div>`:''}
  </div>`}
 function smap(){const p=periodDays(SV,SO);return `<div class="card"><h3>🔥 Study heatmap</h3>${viewBtns(SV,'sView')}
  <div class="row between" style="margin-bottom:10px"><button class="x" onclick="sNav(-1)">◀</button><b>${p.label}</b><button class="x" onclick="sNav(1)" style="${SO>=0?'opacity:.25':''}">▶</button></div>
  ${gridView(SV,p,sColor,d=>{const m=minsOn(d);return m&&d<=td()?short(m):''},'sPick',SD)}
- <div class="row" style="gap:10px;margin-top:10px;font-size:11px;color:var(--mut);flex-wrap:wrap"><span><span class="dot" style="background:#22c55e"></span>Goal hit</span><span><span class="dot" style="background:rgba(125,211,252,.85)"></span>More</span><span><span class="dot" style="background:rgba(125,211,252,.3)"></span>Less</span><span><span class="dot" style="background:#1a2438"></span>None</span></div>
+ <div class="row" style="gap:10px;margin-top:10px;font-size:11px;color:var(--mut);flex-wrap:wrap"><span><span class="dot" style="background:#22c55e"></span>Goal hit</span><span><span class="dot" style="background:rgba(125,211,252,.85)"></span>More</span><span><span class="dot" style="background:rgba(125,211,252,.3)"></span>Less</span><span><span class="dot" style="background:#1a2438"></span>None / outside arc</span></div>
  ${sSum(p.days)}${sDetail()}</div>`}
 
 /* ---------- STUDY PAGE ---------- */
@@ -325,7 +335,7 @@ function addAcc(){const n=v('an');if(!n)return;S.acc.push({id:uid(),name:n,type:
 /* ---------- MORE ---------- */
 function pMore(){return `<div class="card"><h3>☁ Cloud sync (phone ↔ laptop)</h3>${SY.url?`<div class="row between"><span>Connected to Google Drive</span><span class="mut">${syncState}</span></div><div class="mut" style="margin-top:6px">Changes upload automatically. Data is pulled every time you open the app.</div><div class="row" style="margin-top:10px"><button style="flex:1" onclick="pull()">🔄 Sync now</button><button class="g" style="flex:1" onclick="disc()">Disconnect</button></div>`
  :`<div class="mut" style="margin-bottom:10px">Paste your Google Apps Script Web app URL and your PIN.</div><input id="surl" placeholder="https://script.google.com/macros/s/.../exec"><input id="spin" type="password" placeholder="PIN"><button style="width:100%" onclick="connect()">Connect</button>`}</div>
- <div class="card"><h3>Winter Arc settings</h3><div class="mut">Start date</div><input id="sd" type="date" value="${S.start}"><div class="mut">Arc length (days)</div><input id="sdy" type="number" value="${S.days}"><div class="mut">Daily study goal (minutes)</div><input id="sg" type="number" value="${S.goal}"><button style="width:100%" onclick="saveSet()">Save</button></div>
+ <div class="card"><h3>Winter Arc settings</h3><div class="mut">Start date</div><input id="sd" type="date" value="${S.start}"><div class="mut">Arc length (days)</div><input id="sdy" type="number" value="${S.days}"><div class="mut" style="margin-bottom:8px">Arc runs ${shortDate(S.start)} → ${shortDate(arcEnd())}</div><div class="mut">Daily study goal (minutes)</div><input id="sg" type="number" value="${S.goal}"><button style="width:100%" onclick="saveSet()">Save</button></div>
  <div class="card"><h3>Backup file</h3><div class="mut" style="margin-bottom:10px">Extra safety: download a backup now and then and keep it in Google Drive.</div>
  <div class="row"><button style="flex:1" onclick="exportD()">⬇ Export</button><label style="flex:1"><span class="btnlike">⬆ Import</span><input type="file" accept=".json" hidden onchange="importD(this.files[0])"></label></div></div>
  <div class="card"><h3>Danger zone</h3><button class="r" style="width:100%" onclick="if(confirm('Delete ALL data on this device?')&&confirm('Really? If sync is on, cloud data will download again on reopen.')){localStorage.removeItem(K);location.reload()}">Reset this device</button></div>`}
