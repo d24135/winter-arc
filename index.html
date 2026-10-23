@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#0b1220"><title>Winter Arc</title>
+<style>
+:root{--bg:#0b1220;--card:#131c2e;--line:#22304a;--txt:#e6edf7;--mut:#8a9bb5;--ice:#7dd3fc;--ok:#4ade80;--bad:#f87171;--warn:#fbbf24}
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,Roboto,sans-serif}
+body{background:var(--bg);color:var(--txt);padding-bottom:80px;-webkit-tap-highlight-color:transparent}
+header{padding:18px 16px 10px;background:linear-gradient(180deg,#12213d,var(--bg))}
+h1{font-size:21px;letter-spacing:3px;color:var(--ice)}
+.sub{color:var(--mut);font-size:13px}
+main{padding:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.card h3{font-size:15px;margin-bottom:10px}
+.row{display:flex;gap:8px;align-items:center}.between{justify-content:space-between}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+input,select{width:100%;background:#0e1626;border:1px solid var(--line);color:var(--txt);padding:11px;border-radius:10px;font-size:15px;margin-bottom:8px}
+button,.btnlike{background:var(--ice);color:#0b1220;border:0;padding:11px 14px;border-radius:10px;font-weight:700;font-size:15px;display:block;text-align:center}
+button.g,.btnlike{background:#1e2a42;color:var(--txt)}button.r{background:var(--bad);color:#fff}
+.big{font-size:54px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums;margin:14px 0}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:#0e1626;border-top:1px solid var(--line)}
+nav button{flex:1;background:none;color:var(--mut);border-radius:0;padding:10px 0;font-size:12px}
+nav button.on{color:var(--ice)}nav b{display:block;font-size:20px}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px}.tabs button{white-space:nowrap;padding:8px 12px;font-size:13px}
+.bar{height:10px;background:#0e1626;border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ice);transition:.3s}
+.habit{display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:#0e1626;margin-bottom:6px}
+.habit.done{background:#12301f;color:var(--mut);text-decoration:line-through}
+.chk{width:24px;height:24px;border-radius:7px;border:2px solid var(--ice);display:grid;place-items:center;font-weight:900;flex-shrink:0}
+.done .chk{background:var(--ok);border-color:var(--ok);color:#0b1220}
+.li{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px;gap:8px}.li:last-child{border:0}
+.mut{color:var(--mut);font-size:12px}.pos{color:var(--ok)}.neg{color:var(--bad)}
+.heat{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.heat div{aspect-ratio:1;border-radius:4px}
+.x{background:none!important;color:var(--mut)!important;padding:4px 8px}
+.stat{font-size:22px;font-weight:800}.quote{font-style:italic;color:#cbd5e1;font-size:14px;margin-top:8px}
+#toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--ok);color:#0b1220;padding:10px 18px;border-radius:20px;font-weight:700;opacity:0;transition:.3s;pointer-events:none;z-index:9}
+</style></head><body>
+<header><div class="row between"><h1>❄ WINTER ARC</h1><div id="lvl" class="sub"></div></div><div id="dayc" class="sub"></div><div id="quote" class="quote"></div></header>
+<main id="app"></main><div id="toast"></div>
+<nav><button data-p="arc" onclick="go('arc')"><b>❄</b>Arc</button><button data-p="study" onclick="go('study')"><b id="nst">⏱</b>Study</button><button data-p="money" onclick="go('money')"><b>₹</b>Money</button><button data-p="more" onclick="go('more')"><b>⚙</b>More</button></nav>
+<script>
+const K='winterArc_v1',$=id=>document.getElementById(id),v=id=>$(id).value.trim();
+const td=()=>new Date().toLocaleDateString('en-CA'),mo=()=>td().slice(0,7);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const R=n=>'₹'+Math.round(n).toLocaleString('en-IN'),sum=(a,f)=>a.reduce((s,x)=>s+f(x),0);
+const fm=m=>m>=60?`${Math.floor(m/60)}h ${m%60}m`:`${m}m`;
+const DEF={start:td(),days:90,goal:240,budget:0,
+ habits:['Wake up before 6:30 AM','Workout / walk 20 min','Hit study goal','Read 10 pages','No junk food','No reels till study is done','Log every expense','Sleep by 11 PM'].map((n,i)=>({id:'h'+i,n})),
+ hlog:{},sessions:[],timer:{run:false,t0:0,acc:0,subj:'',pomo:false},
+ acc:[{id:'b1',name:'Bank 1',type:'bank',open:0},{id:'b2',name:'Bank 2',type:'bank',open:0},{id:'cc',name:'Credit Card',type:'card',open:0,limit:0}],
+ tx:[],debts:[],fixed:[],inv:[]};
+let S=Object.assign(structuredClone(DEF),JSON.parse(localStorage.getItem(K)||'{}'));
+let P='arc',MT='over',TT='exp',HM=mo(),wl=null;
+const save=()=>localStorage.setItem(K,JSON.stringify(S));
+const Q=["You don't need motivation. You need to start.","Lazy mood? Do 10 minutes. Then decide.","Small daily wins beat rare heroic efforts.","Winter is for building. Spring is for showing.","Every rupee tracked is a rupee controlled.","Don't break the chain.","The you of 90 days later is watching.","Comfort is the enemy of the arc.","One more session. One less excuse.","Show up even when it's ugly.","Debt-free and disciplined. That's the arc.","Nobody is coming to save you. Open the book."];
+const RK=['Snowflake','Frost','Ice Cold','Blizzard','Glacier','Avalanche','Polar Beast','Arctic Legend'];
+function toast(m){const t=$('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1700)}
+function go(p){P=p;render();scrollTo(0,0)}
+
+/* ---------- ARC ---------- */
+const doneIds=d=>(S.hlog[d]||[]).filter(id=>S.habits.some(h=>h.id===id));
+const minsOn=d=>sum(S.sessions.filter(s=>s.date===d),s=>s.mins);
+const dayScore=d=>((S.habits.length?doneIds(d).length/S.habits.length:0)+Math.min(1,minsOn(d)/(S.goal||1)))/2;
+const goodDay=d=>(S.goal>0&&minsOn(d)>=S.goal/2)||(S.habits.length>0&&doneIds(d).length>=Math.ceil(S.habits.length*.6));
+function streak(){let n=0,d=new Date();if(!goodDay(td()))d.setDate(d.getDate()-1);while(n<2000&&goodDay(d.toLocaleDateString('en-CA'))){n++;d.setDate(d.getDate()-1)}return n}
+const xp=()=>sum(Object.values(S.hlog),a=>a.length)*20+sum(S.sessions,s=>s.mins);
+function heat(fn){let h='';for(let i=34;i>=0;i--){const x=new Date();x.setDate(x.getDate()-i);const k=x.toLocaleDateString('en-CA'),f=Math.min(1,fn(k));h+=`<div style="background:${f>0?`rgba(125,211,252,${.2+.8*f})`:'#1a2438'}${k===td()?';outline:2px solid #fff':''}"></div>`}return `<div class="heat">${h}</div><div class="mut" style="margin-top:6px">Brighter = better day. White border = today.</div>`}
+function head(){const day=Math.floor((new Date(td())-new Date(S.start))/864e5)+1;
+ $('dayc').textContent=day<1?`Arc starts on ${S.start}`:day>S.days?`Arc complete! ${S.days} days done 🏆`:`Day ${day} of ${S.days} · ${S.days-day} days left`;
+ const l=Math.floor(xp()/500)+1;$('lvl').textContent=`Lv ${l} · ${RK[Math.min(Math.floor((l-1)/3),7)]}`;
+ $('quote').textContent='“'+Q[Math.max(day,0)%Q.length]+'”'}
+function msg(s){return s>=100?'Perfect day. This is who you are now ❄':s>=70?'Strong day. Finish it off.':s>=40?"Halfway there. Don't stop now.":s>0?'Started. Keep stacking small wins.':'Cold start. Pick ONE habit and do it right now.'}
+function pArc(){const d=td(),done=doneIds(d),sc=Math.round(dayScore(d)*100),x=xp(),l=Math.floor(x/500)+1;
+ return `<div class="card"><div class="row between"><div><div class="mut">TODAY'S SCORE</div><div class="stat">${sc}%</div></div><div style="text-align:right"><div class="mut">STREAK</div><div class="stat">🔥 ${streak()}</div></div></div>
+ <div class="bar" style="margin-top:10px"><i style="width:${sc}%"></i></div><div class="mut" style="margin-top:8px">${msg(sc)}</div>
+ <div class="mut" style="margin-top:4px">XP ${x} · ${500-x%500} XP to Level ${l+1}</div></div>
+ ${S.tx.some(t=>t.date===d)?'':`<div class="card" style="border-color:var(--warn)"><div class="row between"><span>💸 No expense logged today</span><button style="padding:8px 12px;font-size:13px" onclick="MT='add';go('money')">Log now</button></div></div>`}
+ <div class="card"><h3>Feeling lazy?</h3><div class="mut" style="margin-bottom:10px">Don't think. Just start a 10-minute session. Starting is the hardest part.</div><button style="width:100%" onclick="lazyStart()">▶ Just 10 minutes</button></div>
+ <div class="card"><h3>Non-negotiables (${done.length}/${S.habits.length})</h3>
+ ${S.habits.map(h=>`<div class="habit ${done.includes(h.id)?'done':''}" onclick="togH('${h.id}')"><div class="chk">${done.includes(h.id)?'✓':''}</div><div style="flex:1">${esc(h.n)}</div><button class="x" onclick="event.stopPropagation();delH('${h.id}')">✕</button></div>`).join('')}
+ <div class="row" style="margin-top:8px"><input id="nh" placeholder="Add a habit" style="margin:0"><button onclick="addH()">+</button></div></div>
+ <div class="card"><h3>Last 5 weeks</h3>${heat(dayScore)}</div>`}
+function togH(id){const d=td(),a=S.hlog[d]||(S.hlog[d]=[]),i=a.indexOf(id);if(i<0){a.push(id);navigator.vibrate?.(30);if(doneIds(d).length===S.habits.length)toast('All done today! Legend 🏆');else toast('+20 XP')}else a.splice(i,1);save();render()}
+function delH(id){if(confirm('Remove this habit?')){S.habits=S.habits.filter(h=>h.id!==id);save();render()}}
+function addH(){const n=v('nh');if(!n)return;S.habits.push({id:uid(),n});save();render()}
+function lazyStart(){if(!S.timer.run){S.timer.pomo=false;S.timer.subj=S.timer.subj||'Quick start'}P='study';startT();scrollTo(0,0)}
+
+/* ---------- STUDY ---------- */
+const el=()=>S.timer.acc+(S.timer.run?Date.now()-S.timer.t0:0);
+const hms=ms=>{const s=Math.floor(ms/1000);return[Math.floor(s/3600),Math.floor(s%3600/60),s%60].map(n=>String(n).padStart(2,'0')).join(':')};
+async function lock(){try{wl=await navigator.wakeLock?.request('screen')}catch(e){}}
+function startT(){if(S.timer.run)return;S.timer.subj=$('subj')?.value.trim()||S.timer.subj||'General';S.timer.run=true;S.timer.t0=Date.now();save();lock();render()}
+function pauseT(){if(!S.timer.run)return;S.timer.acc=el();S.timer.run=false;save();wl?.release?.();render()}
+function stopT(auto){let mins=Math.round(el()/60000);if(S.timer.pomo)mins=Math.min(mins,25);const subj=$('subj')?.value.trim()||S.timer.subj||'General';
+ S.timer={...S.timer,run:false,t0:0,acc:0,subj};wl?.release?.();wl=null;
+ if(mins>=1){S.sessions.push({id:uid(),subj,mins,date:td()});toast(`Saved ${fm(mins)} · +${mins} XP 💪`)}else if(!auto)alert('Less than 1 minute. Not saved.');
+ save();render()}
+function setPomo(b){if(S.timer.run||S.timer.acc)return toast('Stop the timer first');S.timer.pomo=b;save();render()}
+function beep(){try{navigator.vibrate?.([400,150,400,150,400]);const c=new AudioContext(),o=c.createOscillator();o.frequency.value=880;o.connect(c.destination);o.start();o.stop(c.currentTime+.7)}catch(e){}}
+function pStudy(){const d=td(),m=minsOn(d),subs=[...new Set(S.sessions.map(s=>s.subj))];
+ const w=new Date();w.setDate(w.getDate()-6);const w0=w.toLocaleDateString('en-CA'),wk={};
+ S.sessions.filter(s=>s.date>=w0).forEach(s=>wk[s.subj]=(wk[s.subj]||0)+s.mins);
+ const we=Object.entries(wk).sort((a,b)=>b[1]-a[1]),best=Math.max(0,...Object.values(S.sessions.reduce((a,s)=>(a[s.date]=(a[s.date]||0)+s.mins,a),{})));
+ return `<div class="card"><div class="row"><button class="${S.timer.pomo?'g':''}" style="flex:1" onclick="setPomo(false)">Free timer</button><button class="${S.timer.pomo?'':'g'}" style="flex:1" onclick="setPomo(true)">🍅 Pomodoro 25</button></div>
+ <div class="big" id="tm">00:00:00</div>
+ <input id="subj" list="sl" placeholder="What are you studying?" value="${esc(S.timer.subj)}" oninput="S.timer.subj=this.value;save()"><datalist id="sl">${subs.map(s=>`<option value="${esc(s)}">`).join('')}</datalist>
+ <div class="row">${S.timer.run?`<button class="g" style="flex:1" onclick="pauseT()">⏸ Pause</button>`:`<button style="flex:1" onclick="startT()">▶ ${S.timer.acc?'Resume':'Start'}</button>`}<button class="r" style="flex:1" onclick="stopT()">■ Stop & Save</button></div>
+ <div class="mut" style="margin-top:8px;text-align:center">Timer keeps running even if you close the app.</div></div>
+ <div class="card"><div class="row between"><b>Today</b><span>${fm(m)} / ${fm(S.goal)}</span></div><div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,m/S.goal*100)}%;background:${m>=S.goal?'var(--ok)':'var(--ice)'}"></i></div>
+ <div class="mut" style="margin-top:6px">${m>=S.goal?'Goal smashed! 🏆 Anything extra is bonus XP.':`${fm(S.goal-m)} to go. You've got this.`}</div></div>
+ <div class="grid2"><div class="card"><div class="mut">LAST 7 DAYS</div><div class="stat">${fm(sum(we,x=>x[1]))}</div></div><div class="card"><div class="mut">BEST DAY</div><div class="stat">${fm(best)}</div></div></div>
+ <div class="card"><h3>Study heatmap</h3>${heat(k=>minsOn(k)/S.goal)}</div>
+ <div class="card"><h3>This week by subject</h3>${we.length?we.map(([s,x])=>`<div style="margin-bottom:8px"><div class="row between" style="font-size:14px"><span>${esc(s)}</span><span>${fm(x)}</span></div><div class="bar"><i style="width:${x/we[0][1]*100}%"></i></div></div>`).join(''):'<div class="mut">No sessions yet.</div>'}</div>
+ <div class="card"><h3>Forgot the timer? Add manually</h3><input id="ms" list="sl" placeholder="Subject"><div class="grid2"><input id="mm" type="number" inputmode="numeric" placeholder="Minutes"><input id="md" type="date" value="${d}"></div><button class="g" style="width:100%" onclick="addMan()">Add session</button></div>
+ <div class="card"><h3>Recent sessions</h3>${S.sessions.slice(-15).reverse().map(s=>`<div class="li"><div>${esc(s.subj)}<div class="mut">${s.date}</div></div><div class="row"><b>${fm(s.mins)}</b><button class="x" onclick="delS('${s.id}')">✕</button></div></div>`).join('')||'<div class="mut">Start your first session above 👆</div>'}</div>`}
+function addMan(){const mins=+$('mm').value;if(!(mins>0))return alert('Enter minutes');S.sessions.push({id:uid(),subj:v('ms')||'General',mins:Math.round(mins),date:$('md').value||td()});save();toast('Added');render()}
+function delS(id){if(confirm('Delete session?')){S.sessions=S.sessions.filter(s=>s.id!==id);save();render()}}
+
+/* ---------- MONEY ---------- */
+const CE=['Food','Groceries','Transport','Fuel','Shopping','Bills','Rent','Recharge','Education','Health','Entertainment','Gifts','Other'];
+const CI=['Salary','Pocket money','Refund','Interest','Freelance','Other'],NOSPEND=['Debt repay','Investment'];
+const accName=id=>S.acc.find(a=>a.id===id)?.name||'—';
+const accOpts=(f=()=>true,sel)=>S.acc.filter(f).map(a=>`<option value="${a.id}" ${a.id===sel?'selected':''}>${esc(a.name)}</option>`).join('');
+function bal(a){let i=0,o=0;S.tx.forEach(t=>{if(t.type==='exp'&&t.acc===a.id)o+=t.amt;if(t.type==='inc'&&t.acc===a.id)i+=t.amt;if(t.type==='xfer'){if(t.acc===a.id)o+=t.amt;if(t.to===a.id)i+=t.amt}});return a.type==='card'?(+a.open||0)+o-i:(+a.open||0)+i-o}
+const debtLeft=d=>d.amt-sum(d.paid,p=>p.amt);
+const daysLeft=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()-d.getDate()+1};
+function pMoney(){const T=[['over','Overview'],['add','+ Add'],['hist','History'],['debt','Borrowed'],['fix','Fixed'],['inv','Invest'],['acc','Accounts']];
+ return `<div class="tabs">${T.map(([k,n])=>`<button class="${MT===k?'':'g'}" onclick="MT='${k}';render()">${n}</button>`).join('')}</div>`+{over:mOver,add:mAdd,hist:mHist,debt:mDebt,fix:mFix,inv:mInv,acc:mAcc}[MT]()}
+function mOver(){const B=S.acc.filter(a=>a.type==='bank'),C=S.acc.filter(a=>a.type==='card');
+ const cash=sum(B,bal),due=sum(C,bal),debt=sum(S.debts,debtLeft),inv=sum(S.inv,x=>+x.cur||0),nw=cash+inv-due-debt;
+ const E=S.tx.filter(t=>t.type==='exp'&&!NOSPEND.includes(t.cat)),tS=sum(E.filter(t=>t.date===td()),t=>t.amt),mE=E.filter(t=>t.date.startsWith(mo())),mS=sum(mE,t=>t.amt);
+ const mI=sum(S.tx.filter(t=>t.type==='inc'&&t.cat!=='Borrowed'&&t.date.startsWith(mo())),t=>t.amt);
+ const cat={};mE.forEach(t=>cat[t.cat]=(cat[t.cat]||0)+t.amt);const top=Object.entries(cat).sort((a,b)=>b[1]-a[1]);
+ const unpaid=S.fixed.filter(f=>!(f.paid||{})[mo()]);
+ return `<div class="card"><div class="mut">NET WORTH</div><div class="stat ${nw<0?'neg':''}" style="font-size:30px">${R(nw)}</div><div class="mut">Banks ${R(cash)} + Invest ${R(inv)} − Card ${R(due)} − Owed ${R(debt)}</div></div>
+ <div class="grid2"><div class="card"><div class="mut">SPENT TODAY</div><div class="stat">${R(tS)}</div></div><div class="card"><div class="mut">THIS MONTH</div><div class="stat">${R(mS)}</div><div class="mut">Income ${R(mI)}</div></div></div>
+ ${S.budget>0?`<div class="card"><div class="row between"><b>Monthly budget</b><span class="${mS>S.budget?'neg':''}">${R(mS)} / ${R(S.budget)}</span></div><div class="bar" style="margin-top:8px"><i style="width:${Math.min(100,mS/S.budget*100)}%;background:${mS>S.budget?'var(--bad)':mS>S.budget*.8?'var(--warn)':'var(--ok)'}"></i></div><div class="mut" style="margin-top:6px">${mS>S.budget?'Over budget! Freeze non-essentials.':`${R(S.budget-mS)} left · about ${R((S.budget-mS)/daysLeft())}/day`}</div></div>`:''}
+ <div class="card"><h3>Accounts</h3>${S.acc.map(a=>`<div class="li"><div>${a.type==='card'?'💳':'🏦'} ${esc(a.name)}${a.type==='card'&&a.limit?`<div class="mut">Limit ${R(a.limit)} · Available ${R(a.limit-bal(a))}</div>`:''}</div><b class="${a.type==='card'&&bal(a)>0?'neg':''}">${a.type==='card'?'Due '+R(bal(a)):R(bal(a))}</b></div>`).join('')}</div>
+ ${unpaid.length?`<div class="card" style="border-color:var(--warn)"><h3>⚠ Fixed expenses unpaid this month</h3>${unpaid.map(f=>`<div class="li"><span>${esc(f.name)} <span class="mut">day ${f.day}</span></span><b>${R(f.amt)}</b></div>`).join('')}</div>`:''}
+ <div class="card"><h3>Where money went (this month)</h3>${top.length?top.map(([c,a])=>`<div style="margin-bottom:8px"><div class="row between" style="font-size:14px"><span>${esc(c)}</span><span>${R(a)}</span></div><div class="bar"><i style="width:${a/top[0][1]*100}%"></i></div></div>`).join(''):'<div class="mut">No expenses yet.</div>'}</div>`}
+function mAdd(){return `<div class="card"><h3>Add transaction</h3>
+ <div class="row" style="gap:6px;margin-bottom:10px">${[['exp','Expense'],['inc','Income'],['xfer','Transfer / Card bill']].map(([k,n])=>`<button class="${TT===k?'':'g'}" style="flex:1;font-size:13px;padding:9px 4px" onclick="TT='${k}';render()">${n}</button>`).join('')}</div>
+ <input id="amt" type="number" inputmode="decimal" placeholder="Amount ₹">
+ <div class="mut">${TT==='inc'?'Into':'From'}</div><select id="acc">${accOpts()}</select>
+ ${TT==='xfer'?`<div class="mut">To (choose Credit Card to pay its bill)</div><select id="to">${accOpts(()=>true,S.acc.find(a=>a.type==='card')?.id)}</select>`:`<select id="cat">${(TT==='exp'?CE:CI).map(c=>`<option>${c}</option>`).join('')}</select>`}
+ <input id="note" placeholder="Note (optional)"><input id="dt" type="date" value="${td()}">
+ <button style="width:100%" onclick="addTx()">Save</button></div>`}
+function addTx(){const amt=+$('amt').value;if(!(amt>0))return alert('Enter amount');const t={id:uid(),type:TT,amt,acc:$('acc').value,date:$('dt').value||td(),note:v('note')};
+ if(TT==='xfer'){t.to=$('to').value;if(t.to===t.acc)return alert('Choose two different accounts');t.cat='Transfer'}else t.cat=$('cat').value;
+ S.tx.push(t);save();toast('Saved ✓');render()}
+function mHist(){const L=S.tx.filter(t=>t.date.startsWith(HM)).sort((a,b)=>b.date.localeCompare(a.date));
+ return `<div class="card"><input type="month" value="${HM}" onchange="HM=this.value;render()">
+ <div class="mut" style="margin-bottom:6px">Out ${R(sum(L.filter(t=>t.type==='exp'),t=>t.amt))} · In ${R(sum(L.filter(t=>t.type==='inc'),t=>t.amt))}</div>
+ ${L.length?L.map(t=>`<div class="li"><div><div>${t.type==='xfer'?'🔁 '+esc(accName(t.acc))+' → '+esc(accName(t.to)):esc(t.cat)}${t.note?' · '+esc(t.note):''}</div><div class="mut">${t.date}${t.type==='xfer'?'':' · '+esc(accName(t.acc))}</div></div><div class="row"><b class="${t.type==='exp'?'neg':t.type==='inc'?'pos':''}">${t.type==='exp'?'−':t.type==='inc'?'+':''}${R(t.amt)}</b><button class="x" onclick="delTx('${t.id}')">✕</button></div></div>`).join(''):'<div class="mut">Nothing this month.</div>'}</div>`}
+function delTx(id){if(!confirm('Delete this entry?'))return;S.tx=S.tx.filter(t=>t.id!==id);S.fixed.forEach(f=>{for(const k in f.paid||{})if(f.paid[k]===id)delete f.paid[k]});S.debts.forEach(d=>d.paid=d.paid.filter(p=>p.tid!==id));save();render()}
+function mDebt(){return `<div class="card"><div class="mut">TOTAL YOU STILL OWE</div><div class="stat neg">${R(sum(S.debts,debtLeft))}</div></div>
+ <div class="card"><h3>Add borrowed money</h3><input id="dp" placeholder="From whom? (e.g. Mama ji)"><input id="da" type="number" inputmode="decimal" placeholder="Amount ₹">
+ <div class="mut">Money received into</div><select id="dac"><option value="">Not into any account</option>${accOpts(a=>a.type==='bank')}</select>
+ <input id="dd" type="date" value="${td()}"><input id="dn" placeholder="Note / promised return date"><button style="width:100%" onclick="addDebt()">Add</button></div>
+ ${S.debts.map(d=>{const l=debtLeft(d),p=d.amt-l;return `<div class="card"><div class="row between"><b>${esc(d.person)}</b><button class="x" onclick="delDebt('${d.id}')">✕</button></div><div class="mut">${d.date}${d.note?' · '+esc(d.note):''}</div>
+ <div class="row between" style="margin:8px 0;font-size:14px"><span>Repaid ${R(p)} of ${R(d.amt)}</span><b class="${l>0?'neg':'pos'}">${l>0?R(l)+' left':'Cleared ✓'}</b></div><div class="bar"><i style="width:${p/d.amt*100}%;background:var(--ok)"></i></div>
+ ${l>0?`<button class="g" style="width:100%;margin-top:10px" onclick="repay('${d.id}')">Record repayment</button>`:''}</div>`}).join('')}`}
+function addDebt(){const amt=+$('da').value,person=v('dp');if(!person||!(amt>0))return alert('Enter name and amount');const d={id:uid(),person,amt,acc:$('dac').value,date:$('dd').value||td(),note:v('dn'),paid:[]};
+ if(d.acc)S.tx.push({id:uid(),type:'inc',amt,acc:d.acc,cat:'Borrowed',note:'From '+person,date:d.date});S.debts.push(d);save();toast('Added');render()}
+function repay(id){const d=S.debts.find(x=>x.id===id),acc=d.acc||S.acc.find(x=>x.type==='bank')?.id;const a=+prompt(`How much did you repay ${d.person}?\nLeft: ${R(debtLeft(d))}\n(Will be deducted from ${accName(acc)})`);if(!(a>0))return;
+ const tid=uid();S.tx.push({id:tid,type:'exp',amt:a,acc,cat:'Debt repay',note:'To '+d.person,date:td()});d.paid.push({amt:a,date:td(),tid});save();toast('Repayment saved 💪');render()}
+function delDebt(id){if(confirm('Delete this record?')){S.debts=S.debts.filter(d=>d.id!==id);save();render()}}
+function mFix(){const m=mo();return `<div class="card"><div class="mut">FIXED PER MONTH</div><div class="stat">${R(sum(S.fixed,f=>f.amt))}</div><div class="mut">Paid this month: ${R(sum(S.fixed.filter(f=>(f.paid||{})[m]),f=>f.amt))}</div></div>
+ <div class="card"><h3>Add fixed expense</h3><input id="fn" placeholder="Rent, WiFi, EMI, Gym, Netflix..."><input id="fa" type="number" inputmode="decimal" placeholder="Amount ₹"><input id="fd" type="number" inputmode="numeric" placeholder="Due day of month (1-31)"><div class="mut">Paid from</div><select id="fac">${accOpts()}</select><button style="width:100%" onclick="addFix()">Add</button></div>
+ <div class="card"><h3>This month</h3>${S.fixed.length?S.fixed.sort((a,b)=>a.day-b.day).map(f=>{const p=(f.paid||{})[m];return `<div class="li"><div><div>${esc(f.name)} · ${R(f.amt)}</div><div class="mut">Day ${f.day} · ${esc(accName(f.acc))}</div></div><div class="row"><button class="${p?'':'g'}" style="padding:8px 10px;font-size:13px;${p?'background:var(--ok)':''}" onclick="payFix('${f.id}')">${p?'Paid ✓':'Mark paid'}</button><button class="x" onclick="delFix('${f.id}')">✕</button></div></div>`}).join(''):'<div class="mut">No fixed expenses yet.</div>'}</div>`}
+function addFix(){const name=v('fn'),amt=+$('fa').value;if(!name||!(amt>0))return alert('Enter name and amount');S.fixed.push({id:uid(),name,amt,day:Math.min(31,Math.max(1,+$('fd').value||1)),acc:$('fac').value,paid:{}});save();render()}
+function payFix(id){const f=S.fixed.find(x=>x.id===id),m=mo();f.paid=f.paid||{};
+ if(f.paid[m]){if(!confirm('Undo payment?'))return;S.tx=S.tx.filter(t=>t.id!==f.paid[m]);delete f.paid[m]}
+ else{const tid=uid();S.tx.push({id:tid,type:'exp',amt:f.amt,acc:f.acc,cat:'Bills',note:f.name,date:td()});f.paid[m]=tid;toast('Paid ✓')}save();render()}
+function delFix(id){if(confirm('Remove this fixed expense?')){S.fixed=S.fixed.filter(f=>f.id!==id);save();render()}}
+function mInv(){const ti=sum(S.inv,x=>x.amt),tc=sum(S.inv,x=>x.cur),pl=tc-ti;
+ return `<div class="card"><div class="mut">PORTFOLIO VALUE</div><div class="stat">${R(tc)}</div><div class="${pl<0?'neg':'pos'}">${pl>=0?'+':''}${R(pl)} ${ti?`(${(pl/ti*100).toFixed(1)}%)`:''}</div><div class="mut">Invested ${R(ti)}</div></div>
+ <div class="card"><h3>Add investment</h3><input id="in" placeholder="Name (e.g. Nifty 50 SIP)"><select id="it">${['SIP / Mutual fund','Stocks','FD / RD','Gold','PPF / NPS','Crypto','Other'].map(x=>`<option>${x}</option>`).join('')}</select>
+ <input id="ia" type="number" inputmode="decimal" placeholder="Amount invested ₹"><input id="ic" type="number" inputmode="decimal" placeholder="Current value ₹ (blank = same)">
+ <div class="mut">Paid from (deducts bank balance)</div><select id="iac"><option value="">Already invested earlier (don't deduct)</option>${accOpts(a=>a.type==='bank')}</select><button style="width:100%" onclick="addInv()">Add</button></div>
+ ${S.inv.map(x=>{const g=x.cur-x.amt;return `<div class="card"><div class="row between"><div><b>${esc(x.name)}</b><div class="mut">${esc(x.type)}</div></div><button class="x" onclick="delInv('${x.id}')">✕</button></div>
+ <div class="row between" style="margin:8px 0;font-size:14px"><span>Invested ${R(x.amt)}</span><b>${R(x.cur)} <span class="${g<0?'neg':'pos'}">(${g>=0?'+':''}${R(g)})</span></b></div>
+ <div class="row"><button class="g" style="flex:1;font-size:13px" onclick="invAdd('${x.id}')">+ Invest more</button><button class="g" style="flex:1;font-size:13px" onclick="invUpd('${x.id}')">Update value</button></div></div>`}).join('')}`}
+function addInv(){const name=v('in'),amt=+$('ia').value;if(!name||!(amt>0))return alert('Enter name and amount');const acc=$('iac').value;
+ S.inv.push({id:uid(),name,type:$('it').value,amt,cur:+$('ic').value||amt,acc});if(acc)S.tx.push({id:uid(),type:'exp',amt,acc,cat:'Investment',note:name,date:td()});save();toast('Added 📈');render()}
+function invAdd(id){const x=S.inv.find(i=>i.id===id),a=+prompt('Amount invested now ₹');if(!(a>0))return;x.amt+=a;x.cur+=a;if(x.acc)S.tx.push({id:uid(),type:'exp',amt:a,acc:x.acc,cat:'Investment',note:x.name,date:td()});save();render()}
+function invUpd(id){const x=S.inv.find(i=>i.id===id),a=prompt('Current value ₹',x.cur);if(a===null||isNaN(+a))return;x.cur=+a;save();render()}
+function delInv(id){if(confirm('Delete this investment?')){S.inv=S.inv.filter(i=>i.id!==id);save();render()}}
+function mAcc(){return `<div class="card"><h3>Your accounts</h3><div class="mut" style="margin-bottom:10px">Enter each bank's balance on the day you start. For the credit card, enter what you already owe. Everything after that is calculated from your entries.</div>
+ ${S.acc.map((a,i)=>`<div style="border-top:1px solid var(--line);padding-top:10px;margin-top:6px"><div class="mut">${a.type==='card'?'💳 Credit card':'🏦 Bank / wallet'}</div><input value="${esc(a.name)}" onchange="S.acc[${i}].name=this.value;save()">
+ <div class="grid2"><div><div class="mut">${a.type==='card'?'Already owed':'Starting balance'}</div><input type="number" value="${a.open}" onchange="S.acc[${i}].open=+this.value;save();toast('Saved')"></div>${a.type==='card'?`<div><div class="mut">Credit limit</div><input type="number" value="${a.limit||0}" onchange="S.acc[${i}].limit=+this.value;save();toast('Saved')"></div>`:''}</div></div>`).join('')}</div>
+ <div class="card"><h3>Add account</h3><input id="an" placeholder="Name (e.g. Cash, Paytm)"><select id="aty"><option value="bank">Bank / Wallet / Cash</option><option value="card">Credit card</option></select><button style="width:100%" onclick="addAcc()">Add</button></div>
+ <div class="card"><h3>Monthly spending budget</h3><input type="number" value="${S.budget||''}" placeholder="e.g. 8000" onchange="S.budget=+this.value;save();toast('Budget saved')"></div>`}
+function addAcc(){const n=v('an');if(!n)return;S.acc.push({id:uid(),name:n,type:$('aty').value,open:0,limit:0});save();render()}
+
+/* ---------- MORE ---------- */
+function pMore(){return `<div class="card"><h3>Winter Arc settings</h3><div class="mut">Start date</div><input id="sd" type="date" value="${S.start}"><div class="mut">Arc length (days)</div><input id="sdy" type="number" value="${S.days}"><div class="mut">Daily study goal (minutes)</div><input id="sg" type="number" value="${S.goal}"><button style="width:100%" onclick="saveSet()">Save</button></div>
+ <div class="card"><h3>Backup (do this every Sunday!)</h3><div class="mut" style="margin-bottom:10px">Your data lives only in this phone's Chrome. Clearing Chrome data deletes it. Export a backup regularly and keep it in Google Drive.</div>
+ <div class="row"><button style="flex:1" onclick="exportD()">⬇ Export</button><label style="flex:1"><span class="btnlike">⬆ Import</span><input type="file" accept=".json" hidden onchange="importD(this.files[0])"></label></div></div>
+ <div class="card"><h3>Danger zone</h3><button class="r" style="width:100%" onclick="if(confirm('Delete ALL data?')&&confirm('Really? This cannot be undone.')){localStorage.removeItem(K);location.reload()}">Reset everything</button></div>`}
+function saveSet(){S.start=$('sd').value||td();S.days=+v('sdy')||90;S.goal=+v('sg')||240;save();toast('Saved');render()}
+function exportD(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S)],{type:'application/json'}));a.download=`winter-arc-backup-${td()}.json`;a.click()}
+function importD(f){if(!f)return;const r=new FileReader();r.onload=()=>{try{S=Object.assign(structuredClone(DEF),JSON.parse(r.result));save();render();alert('Restored!')}catch(e){alert('Invalid backup file')}};r.readAsText(f)}
+
+/* ---------- CORE ---------- */
+function render(){head();$('app').innerHTML={arc:pArc,study:pStudy,money:pMoney,more:pMore}[P]();
+ document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.p===P));$('nst').textContent=S.timer.run?'🔴':'⏱'}
+setInterval(()=>{const ms=el();if(S.timer.pomo&&S.timer.run&&ms>=25*60000){stopT(true);beep();setTimeout(()=>alert('🍅 Pomodoro done! Take a 5 minute break.'),100);return}
+ const t=$('tm');if(t)t.textContent=hms(S.timer.pomo?Math.max(0,25*60000-ms):ms)},500);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(S.timer.run)lock();render()}});
+render();
+</script></body></html>
