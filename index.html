@@ -263,8 +263,8 @@ const accOpts=(f=()=>true,sel)=>S.acc.filter(f).map(a=>`<option value="${a.id}" 
 function bal(a){let i=0,o=0;S.tx.forEach(t=>{if(t.type==='exp'&&t.acc===a.id)o+=t.amt;if(t.type==='inc'&&t.acc===a.id)i+=t.amt;if(t.type==='xfer'){if(t.acc===a.id)o+=t.amt;if(t.to===a.id)i+=t.amt}});return a.type==='card'?(+a.open||0)+o-i:(+a.open||0)+i-o}
 const debtLeft=d=>d.amt-sum(d.paid,p=>p.amt);
 const daysLeft=()=>{const d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()-d.getDate()+1};
-function pMoney(){const T=[['over','Overview'],['add','+ Add'],['hist','History'],['debt','Borrowed'],['fix','Fixed'],['inv','Invest'],['acc','Accounts']];
- return `<div class="tabs">${T.map(([k,n])=>`<button class="${MT===k?'':'g'}" onclick="MT='${k}';render()">${n}</button>`).join('')}</div>`+{over:mOver,add:mAdd,hist:mHist,debt:mDebt,fix:mFix,inv:mInv,acc:mAcc}[MT]()}
+function pMoney(){const T=[['over','Overview'],['ana','📊 Graphs'],['add','+ Add'],['hist','History'],['debt','Borrowed'],['fix','Fixed'],['inv','Invest'],['acc','Accounts']];
+ return `<div class="tabs">${T.map(([k,n])=>`<button class="${MT===k?'':'g'}" onclick="MT='${k}';render()">${n}</button>`).join('')}</div>`+{over:mOver,ana:mAna,add:mAdd,hist:mHist,debt:mDebt,fix:mFix,inv:mInv,acc:mAcc}[MT]()}
 function mOver(){const B=S.acc.filter(a=>a.type==='bank'),C=S.acc.filter(a=>a.type==='card');
  const cash=sum(B,bal),due=sum(C,bal),debt=sum(S.debts,debtLeft),inv=sum(S.inv,x=>+x.cur||0),nw=cash+inv-due-debt;
  const E=S.tx.filter(t=>t.type==='exp'&&!NOSPEND.includes(t.cat)),tS=sum(E.filter(t=>t.date===td()),t=>t.amt),mE=E.filter(t=>t.date.startsWith(mo())),mS=sum(mE,t=>t.amt);
@@ -286,7 +286,7 @@ function mAdd(){return `<div class="card"><h3>Add transaction</h3>
  <button style="width:100%" onclick="addTx()">Save</button></div>`}
 function addTx(){const amt=+$('amt').value;if(!(amt>0))return alert('Enter amount');const t={id:uid(),type:TT,amt,acc:$('acc').value,date:$('dt').value||td(),note:v('note')};
  if(TT==='xfer'){t.to=$('to').value;if(t.to===t.acc)return alert('Choose two different accounts');t.cat='Transfer'}else t.cat=$('cat').value;
- S.tx.push(t);save();toast('Saved ✓');render()}
+ S.tx.push(t);FD=FG=t.date;save();toast('Saved ✓');render()}
 function mHist(){const L=S.tx.filter(t=>t.date.startsWith(HM)).sort((a,b)=>b.date.localeCompare(a.date));
  return `<div class="card"><input type="month" value="${HM}" onchange="HM=this.value;render()">
  <div class="mut" style="margin-bottom:6px">Out ${R(sum(L.filter(t=>t.type==='exp'),t=>t.amt))} · In ${R(sum(L.filter(t=>t.type==='inc'),t=>t.amt))}</div>
@@ -331,6 +331,86 @@ function mAcc(){return `<div class="card"><h3>Your accounts</h3><div class="mut"
  <div class="card"><h3>Add account</h3><input id="an" placeholder="Name (e.g. Cash, Paytm)"><select id="aty"><option value="bank">Bank / Wallet / Cash</option><option value="card">Credit card</option></select><button style="width:100%" onclick="addAcc()">Add</button></div>
  <div class="card"><h3>Monthly spending budget</h3><input type="number" value="${S.budget||''}" placeholder="e.g. 8000" onchange="S.budget=+this.value;save();toast('Budget saved')"></div>`}
 function addAcc(){const n=v('an');if(!n)return;S.acc.push({id:uid(),name:n,type:$('aty').value,open:0,limit:0});save();render()}
+
+/* ---------- MONEY GRAPHS ---------- */
+const CCOL={Food:'#fb923c',Groceries:'#4ade80',Transport:'#7dd3fc',Fuel:'#facc15',Shopping:'#f472b6',Bills:'#a78bfa',Rent:'#f87171',Recharge:'#2dd4bf',Education:'#60a5fa',Health:'#34d399',Entertainment:'#e879f9',Gifts:'#fda4af',Other:'#94a3b8'};
+const ccol=c=>CCOL[c]||'#94a3b8';
+const kR=n=>{n=Math.round(n);return '₹'+(n>=100000?(n/100000).toFixed(1).replace('.0','')+'L':n>=1000?(n/1000).toFixed(1).replace('.0','')+'k':n)};
+let SPM={},FIRST=td(),FREF=1,FV='month',FO=0,FD=td(),FW=0,FG=td();
+function buildSPM(){SPM={};FIRST=td();
+ S.tx.forEach(t=>{if(t.date<FIRST)FIRST=t.date;if(t.type!=='exp'||NOSPEND.includes(t.cat))return;const o=SPM[t.date]||(SPM[t.date]={});o[t.cat]=(o[t.cat]||0)+t.amt});
+ const v=Object.values(SPM).map(o=>sum(Object.values(o),x=>x));FREF=v.length?sum(v,x=>x)/v.length:1}
+const spentOn=d=>sum(Object.values(SPM[d]||{}),x=>x);
+const catsOn=d=>Object.entries(SPM[d]||{}).sort((a,b)=>b[1]-a[1]);
+const incOn=d=>sum(S.tx.filter(t=>t.type==='inc'&&t.cat!=='Borrowed'&&t.date===d),t=>t.amt);
+const dayLim=d=>S.budget>0?S.budget/new Date(+d.slice(0,4),+d.slice(5,7),0).getDate():0;
+const cmp=(x,lbl)=>x>0?`<span class="neg">▲ ${R(x)} more</span> ${lbl}`:x<0?`<span class="pos">▼ ${R(-x)} less</span> ${lbl}`:`Same ${lbl}`;
+
+/* heatmap */
+function fColor(d){if(d>td()||d<FIRST)return '#1a2438';const s=spentOn(d);if(!s)return '#14532d';
+ const f=s/(dayLim(d)||FREF);return f>1.5?'#ef4444':f>1?'#b45309':`rgba(125,211,252,${.2+.65*f})`}
+function fView(x){FV=x;FO=0;render()}
+function fNav(n){const o=Math.min(0,FO+n);if(o===FO)return;FO=o;render()}
+function fPick(d){FD=d;render()}
+function fDay(n){const k=shiftDay(FD,n);if(k>td())return;FD=k;render()}
+function fMon(off){FV='month';FO=off;FD=off===0?td():periodDays('month',off).days.at(-1);render();toast('Opened in heatmap ↓')}
+function fSum(days,V,O){const PD=days.filter(d=>d<=td()&&d>=FIRST);
+ if(!PD.length||!S.tx.length)return '<div class="mut" style="margin-top:12px">No data in this period yet.</div>';
+ const T=sum(PD,spentOn),I=sum(PD,incOn),ns=PD.filter(d=>!spentOn(d)).length,big=PD.reduce((b,d)=>spentOn(d)>spentOn(b)?d:b,PD[0]),
+  over=PD.filter(d=>dayLim(d)&&spentOn(d)>dayLim(d)).length,n=days.filter(d=>d<=td()).length,
+  PV=periodDays(V,O-1).days.slice(0,O===0?n:undefined),PT=sum(PV,spentOn),dif=T-PT;
+ const cat={},pc={};PD.forEach(d=>catsOn(d).forEach(([c,a])=>cat[c]=(cat[c]||0)+a));PV.forEach(d=>catsOn(d).forEach(([c,a])=>pc[c]=(pc[c]||0)+a));
+ const top=Object.entries(cat).sort((a,b)=>b[1]-a[1]);
+ return `<div class="grid2" style="margin-top:12px"><div><div class="mut">TOTAL SPENT</div><div class="stat">${R(T)}</div></div><div><div class="mut">AVG / DAY</div><div class="stat">${R(T/PD.length)}</div></div>
+ <div><div class="mut">NO-SPEND DAYS</div><div class="stat">${ns}/${PD.length}</div></div>
+ ${S.budget>0?`<div><div class="mut">OVER DAILY LIMIT</div><div class="stat ${over?'neg':''}">${over} day${over===1?'':'s'}</div></div>`:`<div><div class="mut">BIGGEST DAY</div><div class="stat">${R(spentOn(big))}</div></div>`}</div>
+ <div class="mut" style="margin-top:8px">Income ${R(I)} · Saved <span class="${I-T<0?'neg':'pos'}">${R(I-T)}</span></div>
+ <div style="margin-top:6px;font-size:13px">${cmp(dif,O===0?`than the same days last ${V}`:`than the previous ${V}`)}${PT?` <span class="mut">(${dif>=0?'+':''}${Math.round(dif/PT*100)}%)</span>`:''}</div>
+ ${spentOn(big)?`<div class="li" onclick="fPick('${big}')" style="cursor:pointer"><span>🔺 Biggest day: ${shortDate(big)}</span><b>${R(spentOn(big))}</b></div>`:''}
+ ${top.length?`<div class="mut" style="margin-top:12px">BY CATEGORY <span style="font-size:10px">(change vs previous)</span></div>${top.map(([c,a])=>{const ch=a-(pc[c]||0);return `<div style="margin-top:6px"><div class="row between" style="font-size:14px"><span><span class="dot" style="background:${ccol(c)}"></span>${esc(c)}</span><span>${R(a)} <span class="mut">${Math.round(a/T*100)}%</span> <span class="${ch>0?'neg':'pos'}" style="font-size:11px">${ch>0?'▲':ch<0?'▼':''}${ch?kR(Math.abs(ch)):''}</span></span></div><div class="bar"><i style="width:${a/top[0][1]*100}%;background:${ccol(c)}"></i></div></div>`}).join('')}`:'<div class="pos" style="margin-top:10px">Zero spending in this period 🧊</div>'}`}
+function fDetail(){const d=FD,fut=d>td(),pre=!fut&&d<FIRST,s=spentOn(d),lim=dayLim(d),sel=catsOn(d),L=S.tx.filter(t=>t.date===d),diff=s-spentOn(prevDay(d));
+ const status=fut?'Future day':pre?'Before you started tracking':s?`${R(s)} spent${lim?` · ${Math.round(s/lim*100)}% of daily limit`:''}`:'No-spend day 🧊';
+ return `<div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px">
+ <div class="row between"><button class="x" onclick="fDay(-1)">◀</button><div style="text-align:center"><b>${longDate(d)}</b><div class="mut ${lim&&s>lim?'neg':''}">${status}</div></div><button class="x" onclick="fDay(1)" style="${d>=td()?'opacity:.25':''}">▶</button></div>
+ ${sel.length?`<div class="bar" style="margin-top:10px;display:flex">${sel.map(([c,x])=>`<i style="width:${x/s*100}%;background:${ccol(c)}"></i>`).join('')}</div>
+ ${sel.map(([c,x])=>`<div class="row between" style="font-size:14px;margin-top:7px"><span><span class="dot" style="background:${ccol(c)}"></span>${esc(c)}</span><span>${R(x)} <span class="mut">${Math.round(x/s*100)}%</span></span></div>`).join('')}`:''}
+ ${L.length?`<div class="mut" style="margin-top:14px">TRANSACTIONS</div>${L.map(t=>`<div class="li"><div>${t.type==='xfer'?'🔁 '+esc(accName(t.acc))+' → '+esc(accName(t.to)):esc(t.cat)}${t.note?` <span class="mut">· ${esc(t.note)}</span>`:''}<div class="mut">${t.type==='xfer'?'Transfer':esc(accName(t.acc))}</div></div><b class="${t.type==='exp'?'neg':t.type==='inc'?'pos':''}">${t.type==='exp'?'−':t.type==='inc'?'+':''}${R(t.amt)}</b></div>`).join('')}`:''}
+ ${!fut&&!pre&&(s||spentOn(prevDay(d)))?`<div class="mut" style="margin-top:8px">${cmp(diff,'than the day before')}</div>`:''}</div>`}
+function fmap(){const p=periodDays(FV,FO);return `<div class="card"><h3>💸 Spending heatmap</h3>${viewBtns(FV,'fView')}
+ <div class="row between" style="margin-bottom:10px"><button class="x" onclick="fNav(-1)">◀</button><b>${p.label}</b><button class="x" onclick="fNav(1)" style="${FO>=0?'opacity:.25':''}">▶</button></div>
+ ${gridView(FV,p,fColor,d=>{const s=spentOn(d);return s&&d<=td()?kR(s):''},'fPick',FD)}
+ <div class="row" style="gap:10px;margin-top:10px;font-size:11px;color:var(--mut);flex-wrap:wrap"><span><span class="dot" style="background:#14532d"></span>No spend</span><span><span class="dot" style="background:rgba(125,211,252,.6)"></span>${S.budget>0?'Within limit':'Below avg'}</span><span><span class="dot" style="background:#b45309"></span>${S.budget>0?'Over limit':'Above avg'}</span><span><span class="dot" style="background:#ef4444"></span>Way over</span></div>
+ ${fSum(p.days,FV,FO)}${fDetail()}</div>`}
+
+/* weekly stacked chart */
+function fWk(n){const g=Math.min(0,FW+n);if(g===FW)return;FW=g;FG=FW===0?td():weekOf(FW)[6];render()}
+function fGPick(d){FG=d;render()}
+function fUsage(){const W=weekOf(FW),tot=W.map(spentOn),lim=dayLim(td()),max=Math.max(lim,...tot,1),wt=sum(tot,x=>x),past=W.filter(d=>d<=td()).length||1,
+ pw=sum(weekOf(FW-1).slice(0,FW===0?past:7),spentOn),sel=catsOn(FG),st=spentOn(FG),diff=st-spentOn(prevDay(FG)),DN=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+ let a=0;const grad=st?sel.map(([c,m])=>{const g=`${ccol(c)} ${a/st*360}deg ${(a+m)/st*360}deg`;a+=m;return g}).join(','):'#1a2438 0deg 360deg';
+ return `<div class="card"><h3>📊 Spending this week</h3>
+ <div class="row between"><button class="x" onclick="fWk(-1)">◀</button><div style="text-align:center"><b>${FW===0?'This week':FW===-1?'Last week':shortDate(W[0])+' – '+shortDate(W[6])}</b><div class="mut">Total ${R(wt)} · Avg ${R(wt/past)}/day</div></div><button class="x" onclick="fWk(1)" style="${FW>=0?'opacity:.25':''}">▶</button></div>
+ <div class="mut" style="text-align:center;margin-top:4px;font-size:12px">${cmp(wt-pw,'than the week before')}</div>
+ <div class="chart">${lim?`<div class="goal" style="bottom:${lim/max*100}%"><span>Limit ${kR(lim)}/day</span></div>`:''}
+ ${W.map((d,i)=>`<div class="col ${d===FG?'sel':''}" onclick="fGPick('${d}')"><div class="stack" style="height:${tot[i]/max*100}%">${catsOn(d).map(([c,m])=>`<i style="height:${m/tot[i]*100}%;background:${ccol(c)}"></i>`).join('')}</div></div>`).join('')}</div>
+ <div class="labels">${W.map((d,i)=>`<small class="${d===FG?'on':''}" onclick="fGPick('${d}')">${DN[i]}</small>`).join('')}</div>
+ <div style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px"><b>${longDate(FG)}</b>
+ <div class="row" style="gap:16px;margin-top:12px"><div class="donut" style="background:conic-gradient(${grad})"><div>${kR(st)}</div></div>
+ <div style="flex:1">${sel.length?sel.map(([c,m])=>`<div class="row between" style="font-size:14px;margin-bottom:7px"><span><span class="dot" style="background:${ccol(c)}"></span>${esc(c)}</span><span>${R(m)} <span class="mut">${Math.round(m/st*100)}%</span></span></div>`).join(''):`<div class="mut">${FG>td()?'Future day':'No spending this day 🧊'}</div>`}</div></div>
+ <div class="mut" style="margin-top:10px">${cmp(diff,'than the day before')}</div></div></div>`}
+
+/* 6-month income vs spending */
+function fMonths(){const M=[...Array(6)].map((_,i)=>{const x=new Date();x.setDate(1);x.setMonth(x.getMonth()-5+i);const k=ds(x).slice(0,7);
+  return{k,off:i-5,n:x.toLocaleDateString('en-IN',{month:'short'}),out:sum(Object.keys(SPM).filter(d=>d.startsWith(k)),spentOn),inc:sum(S.tx.filter(t=>t.type==='inc'&&t.cat!=='Borrowed'&&t.date.startsWith(k)),t=>t.amt)}});
+ const max=Math.max(1,S.budget||0,...M.map(m=>Math.max(m.out,m.inc)));
+ return `<div class="card"><h3>📈 Income vs spending (6 months)</h3>
+ <div class="chart">${S.budget>0?`<div class="goal" style="bottom:${S.budget/max*100}%"><span>Budget ${kR(S.budget)}</span></div>`:''}
+ ${M.map(m=>`<div class="col" style="gap:3px" onclick="fMon(${m.off})"><div class="stack" style="width:40%;height:${m.inc/max*100}%;background:var(--ok)"></div><div class="stack" style="width:40%;height:${m.out/max*100}%;background:${S.budget>0&&m.out>S.budget?'var(--bad)':'var(--ice)'}"></div></div>`).join('')}</div>
+ <div class="labels">${M.map(m=>`<small class="${m.off===0?'on':''}" onclick="fMon(${m.off})">${m.n}</small>`).join('')}</div>
+ <div class="row" style="gap:10px;margin-top:8px;font-size:11px;color:var(--mut)"><span><span class="dot" style="background:var(--ok)"></span>Income</span><span><span class="dot" style="background:var(--ice)"></span>Spent</span>${S.budget>0?'<span><span class="dot" style="background:var(--bad)"></span>Over budget</span>':''}</div>
+ <div style="margin-top:8px">${M.slice().reverse().map(m=>{const sv=m.inc-m.out;return `<div class="li" onclick="fMon(${m.off})" style="cursor:pointer"><div>${m.n}${m.off===0?' <span class="mut">(so far)</span>':''}<div class="mut">Spent ${R(m.out)} · Income ${R(m.inc)}</div></div><b class="${sv<0?'neg':'pos'}">${sv>=0?'+':''}${R(sv)}${m.inc?` <span class="mut">${Math.round(sv/m.inc*100)}%</span>`:''}</b></div>`}).join('')}</div></div>`}
+
+function mAna(){buildSPM();return fMonths()+fmap()+fUsage()}
 
 /* ---------- MORE ---------- */
 function pMore(){return `<div class="card"><h3>☁ Cloud sync (phone ↔ laptop)</h3>${SY.url?`<div class="row between"><span>Connected to Google Drive</span><span class="mut">${syncState}</span></div><div class="mut" style="margin-top:6px">Changes upload automatically. Data is pulled every time you open the app.</div><div class="row" style="margin-top:10px"><button style="flex:1" onclick="pull()">🔄 Sync now</button><button class="g" style="flex:1" onclick="disc()">Disconnect</button></div>`
